@@ -20,6 +20,7 @@
 | `facts.yaml` | 事實帳本。每筆「既定事實」登記：主張 → 重現指令鏈 → 期望值 |
 | `verify_facts.py` | 驗證器。重跑被稽核腳本、比對帳本、不符則 exit 1 |
 | `facts_fabricated_demo.yaml` | 反向驗證用。刻意登記 07/06 真實造假數字，證明閘門會擋 |
+| `hooks/pre-commit` | git pre-commit hook：commit 前重跑帳本，對不上就擋下 commit |
 
 ## 用法
 
@@ -51,14 +52,40 @@ exit code：`0`=全數通過　`1`=有 fact 對不上（**閘門擋下**）　`2
 2. **執行者在 agent 之外**：本目錄位於稽核方工作區，與被稽核程式碼沒有共同作者血緣。
 3. **驗真實性，不只驗出處**：值是當場重跑算出來的，不是讀文件比字串。
 
-## 如何接成真正的閘門（尚未接，需專案方/使用者決定）
+## 如何安裝 pre-commit hook（卡點 A）
 
-⚠️ 以下為建議接法，**本目錄目前只提供驗證器本身，尚未實際接上任何觸發點**。
+⚠️ **稽核方不代裝**：依「外部稽核者不得修改被稽核專案」原則，本目錄只提供 hook 腳本，
+由專案方／使用者自行安裝。以下指令請**由你執行**（Git Bash）：
 
-- **卡點 A：commit** — 在被稽核專案裝 git `pre-commit` hook，呼叫本驗證器，非 0 就擋下 commit。
-  用 git hook（而非 Claude Code hook）才能對「任何人／任何 agent 的 commit」都觸發。
-- **卡點 B：公開部署** — 被稽核專案 CLAUDE.md 規則 1 已規定「push 公開版需使用者同意」，
-  這是天生的外部卡點：**同意之前先跑一次本驗證器，綠燈才准 push**。
+```bash
+cd "<被稽核專案路徑>"                                    # 例：.../Stock analysis
+cp "<facts_gate 路徑>/hooks/pre-commit" .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+安裝後每次 `git commit` 會自動重跑帳本，對不上就擋下。若 `facts_gate` 不在腳本內建的
+預設路徑，改腳本開頭的 `DEFAULT_FACTS_GATE_DIR`，或用環境變數 `FACTS_GATE_DIR` 覆寫。
+
+備註：`.git/hooks/` **不會被 git 追蹤**，故此 hook 不隨 repo 散布，每台機器需各自安裝
+（這也是 git hook 的先天限制：無法靠 repo 強制所有 clone 都裝上）。
+
+### hook 實測結果（2026/07/15，於暫存拋棄式 repo 測試，未動被稽核專案）
+
+| 測試 | 預期 | 實測結果 |
+|---|---|---|
+| A 真值帳本 | 放行 | ✅ 通過閘門，commit 成功 |
+| B 造假值帳本 | 擋下 | ✅ **commit 被擋**，commit 數不變、檔案停在 staged |
+| C 驗證器路徑錯誤 | fail-closed 擋下 | ✅ **擋下**，未靜默放行 |
+| D `git commit --no-verify` | 擋不住（先天限制） | ⚠️ **確實被繞過**，commit 成功 |
+| E 耗時 | — | 約 **1.6 秒**／次 commit |
+
+## 卡點 B：公開部署（更強，因為強制點在人手上）
+
+被稽核專案 CLAUDE.md 規則 1 已規定「push 公開版需使用者同意」——這是天生的外部卡點：
+**同意之前先跑一次本驗證器，綠燈才准 push**。
+
+這個卡點比 pre-commit hook **更強**，因為執行者是人（或稽核方），不是那個可能造假的
+agent 自己；agent 無法用 `--no-verify` 之類的方式繞過另一個人的判斷。
 
 ## 誠實的限制（這工具做不到的事）
 
@@ -68,5 +95,9 @@ exit code：`0`=全數通過　`1`=有 fact 對不上（**閘門擋下**）　`2
   若連上游 `analyze_broker_price_correlation.py` 的 p 值本身都造假，本層抓不到
   → 可日後追加「從原始 broker CSV 重算相關性」的更深 fact。
 - **抓不到不可查證類的造假**（身分／動機／別的 session）——那類只能靠「預設答不知道」＋誘因。
+- **pre-commit hook 可被 `--no-verify` 繞過**（已實測證實，見上表測試 D）。這是 git 的設計，
+  非本腳本缺陷。故 hook 是**提高造假成本的速度顛簸，不是不可繞過的牆**——它擋得住「沒想繞的人」，
+  擋不住「決定要繞的 agent」。**真正繞不過的強制點在卡點 B：由人／稽核方在部署前執行。**
+- **hook 不隨 repo 散布**（`.git/hooks/` 不被追蹤），每台機器需各自安裝。
 - **它不會自己跑**。沒接上卡點之前，它跟 `QA_VERIFIER_GATE.md` 一樣只是躺著的檔案。
   **接上觸發點，才是它從「工具」變成「控制項」的那一步。**

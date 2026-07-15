@@ -1,0 +1,75 @@
+#!/bin/sh
+# =============================================================================
+# pre-commit — facts_gate 事實帳本閘門
+# =============================================================================
+# 作用：commit 前重跑事實帳本（verify_facts.py），任一 fact 對不上就擋下 commit。
+#       目的是讓「捏造/漂移的數字」在進入 git 歷史之前就被攔截，而不是事後才靠
+#       外部稽核重跑才發現（2026/07/06 造假案存活逾一週的原因）。
+#
+# 安裝：見 facts_gate/README.md「如何安裝 pre-commit hook」。
+#
+# 設定（環境變數，皆可省略）：
+#   FACTS_GATE_DIR  facts_gate 目錄絕對路徑（預設為下方 DEFAULT_FACTS_GATE_DIR）
+#   FACTS_LEDGER    帳本路徑（預設 $FACTS_GATE_DIR/facts.yaml）
+#   PYTHON_BIN      python 執行檔（預設 python）
+#
+# -----------------------------------------------------------------------------
+# ⚠️ 誠實限制（務必理解，不要高估這個 hook）
+# -----------------------------------------------------------------------------
+# 1. `git commit --no-verify` 可以直接繞過本 hook——這是 git 的設計，不是本腳本的
+#    缺陷。故本 hook 是「提高造假成本的速度顛簸」，不是「不可繞過的牆」。
+#    真正繞不過的強制點：部署/升級為既定事實之前，由「人或稽核方」執行 verifier。
+# 2. 只驗「已登記在帳本」的 fact。沒登記的數字它管不到。
+# 3. fail-closed：驗證器不存在或跑不起來時，本 hook 一律擋下 commit。
+#    理由——一個壞掉就靜默放行的閘門等於沒有閘門。
+#    若確有正當理由需暫時略過，請明示 `git commit --no-verify` 並自負責任。
+# =============================================================================
+
+set -u
+
+# 安裝時請把這行改成你機器上 facts_gate 的實際絕對路徑
+DEFAULT_FACTS_GATE_DIR="C:/Users/ray74/OneDrive/桌面/專案系列/Claud AI  Project/專案驗證流程/facts_gate"
+
+FACTS_GATE_DIR="${FACTS_GATE_DIR:-$DEFAULT_FACTS_GATE_DIR}"
+FACTS_LEDGER="${FACTS_LEDGER:-$FACTS_GATE_DIR/facts.yaml}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+VERIFIER="$FACTS_GATE_DIR/verify_facts.py"
+
+echo "[facts_gate] 事實帳本閘門：重跑帳本核對數字…"
+
+# --- fail-closed 檢查 ---------------------------------------------------------
+if [ ! -f "$VERIFIER" ]; then
+    echo "[facts_gate] ✗ 找不到驗證器：$VERIFIER"
+    echo "[facts_gate]   閘門 fail-closed，擋下 commit（避免閘門壞掉卻靜默放行）。"
+    echo "[facts_gate]   請設定 FACTS_GATE_DIR，或見 facts_gate/README.md。"
+    exit 1
+fi
+
+if [ ! -f "$FACTS_LEDGER" ]; then
+    echo "[facts_gate] ✗ 找不到帳本：$FACTS_LEDGER"
+    echo "[facts_gate]   閘門 fail-closed，擋下 commit。"
+    exit 1
+fi
+
+# --- 重跑帳本 -----------------------------------------------------------------
+PYTHONUTF8=1 "$PYTHON_BIN" "$VERIFIER" --ledger "$FACTS_LEDGER"
+rc=$?
+
+if [ "$rc" -ne 0 ]; then
+    echo ""
+    echo "[facts_gate] ==================== COMMIT 已被擋下 ===================="
+    echo "[facts_gate] 事實帳本中有數字無法重現（或驗證器執行失敗）。"
+    echo "[facts_gate]"
+    echo "[facts_gate] 這代表以下三種情況之一，請務必先分辨清楚是哪一種："
+    echo "[facts_gate]   (a) 文件/帳本裡的數字是捏造或憑印象寫的  → 用真實輸出改正"
+    echo "[facts_gate]   (b) 底層資料或腳本變動，數字自然漂移      → 重跑後更新帳本 expected"
+    echo "[facts_gate]   (c) 計算邏輯改動導致結果改變              → 確認是預期變更後更新帳本"
+    echo "[facts_gate]"
+    echo "[facts_gate] ⚠️ 不要為了讓 commit 過而直接把 expected 改成實測值——"
+    echo "[facts_gate]    那等於把閘門關掉。先確認是 (a)(b)(c) 哪一種，再動帳本。"
+    echo "[facts_gate] ========================================================="
+    exit 1
+fi
+
+echo "[facts_gate] ✓ 帳本全數逐位重現，放行。"
+exit 0
