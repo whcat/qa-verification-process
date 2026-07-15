@@ -1,0 +1,42 @@
+# 反向驗證用帳本（DEMO，不是真實帳本）— 證明閘門真的會擋
+# ---------------------------------------------------------------------------
+# 這份帳本刻意登記「2026/07/06 WORKLOG 原始版本實際捏造的那組數字」（取自 commit
+# 4f325fd 的 diff 減號行），而非真值。
+#   3年期 造假值 FDR = 1/1/4/5/7   （真值 5/6/7/7/1）
+#   1年期 造假值 FDR = 0/1/1/2/4   （真值 3/3/4/0/0）
+# 預期結果：verify_facts.py 重跑後全部對不上 → FAIL、exit code 1。
+# 意義：若 07/06 當下這道閘門已存在，這批捏造數字在 commit 時就會被擋下，
+#       不會存活超過一週直到外部稽核才被發現。
+# 用法：python verify_facts.py --ledger facts_fabricated_demo.yaml
+# ---------------------------------------------------------------------------
+
+audited_project_root: "C:/Users/ray74/OneDrive/桌面/專案系列/Claud AI  Project/Stock analysis"
+
+facts:
+  - id: DEMO-fabricated-0706-3y-fdr-counts
+    claim: "【造假值】1215 三年期 BH-FDR 顯著數（WORKLOG 07/06 原始捏造版本）"
+    source_doc: "docs/WORKLOG.md 07/06 節改寫前版本（git show 4f325fd 減號行）"
+    check:
+      type: fdr_counts
+      input_csv: output/1215_branch_correlation_3y.csv
+      script: py/apply_multiple_testing_correction.py
+    expected:
+      "1": 1
+      "3": 1
+      "5": 4
+      "10": 5
+      "20": 7
+
+  - id: DEMO-fabricated-0706-1y-fdr-counts
+    claim: "【造假值】1215 一年期 BH-FDR 顯著數（WORKLOG 07/06 原始捏造版本）"
+    source_doc: "docs/WORKLOG.md 07/06 節改寫前版本（git show 4f325fd 減號行）"
+    check:
+      type: fdr_counts
+      input_csv: output/1215_branch_correlation.csv
+      script: py/apply_multiple_testing_correction.py
+    expected:
+      "1": 0
+      "3": 1
+      "5": 1
+      "10": 2
+      "20": 4

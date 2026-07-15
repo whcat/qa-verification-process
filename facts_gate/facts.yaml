@@ -1,0 +1,53 @@
+# 稽核方事實帳本（facts ledger）— Layer 2 反造假控制
+# ---------------------------------------------------------------------------
+# 定位：每一筆「既定事實」（會被寫進 PROGRESS/WORKLOG 當結論、或同步公開版的數字/
+#       具名清單）都登記在此，附「重現指令鏈」與「期望值」。
+# 用法：`python verify_facts.py`（見同目錄 README）——它會把被稽核專案的輸入 CSV
+#       複製到暫存區、重跑腳本、比對輸出，任一筆對不上就以非 0 exit code 擋下。
+# 原則：本帳本與驗證器住在「稽核方」工作區，與被稽核專案沒有共同作者血緣；驗證器
+#       只讀被稽核專案的檔案、絕不寫回（腳本會原地覆寫 CSV，故一律先複製再跑）。
+# ---------------------------------------------------------------------------
+
+# 被稽核專案根目錄（可用 --project-root 覆寫）
+audited_project_root: "C:/Users/ray74/OneDrive/桌面/專案系列/Claud AI  Project/Stock analysis"
+
+facts:
+  # 第一筆：07/06 造假案的正主。原始 WORKLOG 此節數字為捏造（3年期宣稱 1/1/4/5/7），
+  # 我方 2026/07/13 稽核第二輪獨立重跑核實真值為 5/6/7/7/1，被稽核方 07/14 已據此改寫。
+  # 此帳本把「真值」鎖進可重跑的檢查中：日後任何人改動這批數字，重跑對不上即被擋。
+  - id: worklog-0706-1215-3y-fdr-counts
+    claim: "1215 三年期(794分點) 分點買賣超×未來報酬 BH-FDR 顯著數（未來 1/3/5/10/20 日）"
+    source_doc: "docs/WORKLOG.md 2026/07/06 節（原始版本曾造假，見 VERIFICATION_LOG 07/13 第二輪）"
+    verified_by: "2026/07/13 稽核第二輪獨立重跑 + 2026/07/15 本帳本重跑再確認"
+    check:
+      type: fdr_counts                                   # 見 verify_facts.py 內建檢查器
+      input_csv: output/1215_branch_correlation_3y.csv   # 相對 audited_project_root
+      script: py/apply_multiple_testing_correction.py     # 相對 audited_project_root
+    expected:
+      "1": 5
+      "3": 6
+      "5": 7
+      "10": 7
+      "20": 1
+    note: >-
+      重跑鏈：複製 input_csv 到暫存 → `python <script> --csv <暫存副本>` → 解析輸出「FDR顯著」欄。
+      輸入 CSV 的 p 值由 analyze_broker_price_correlation.py 產出；本帳本第一筆先鎖 FDR 這一層，
+      更深一層（從原始 broker CSV 重算相關性再校正）可日後追加為獨立 fact。
+
+  # 第二筆：1年期(743分點) 同一支腳本、同一擷取器，鎖另一份輸入 CSV。
+  # 我方核實真值 1年期 FDR = 3/3/4/0/0（原造假版宣稱 0/1/1/2/4）。
+  - id: worklog-0706-1215-1y-fdr-counts
+    claim: "1215 一年期(743分點) 分點買賣超×未來報酬 BH-FDR 顯著數（未來 1/3/5/10/20 日）"
+    source_doc: "docs/WORKLOG.md 2026/07/06 節"
+    verified_by: "2026/07/13 稽核第二輪 + 2026/07/15 本帳本重跑"
+    check:
+      type: fdr_counts
+      input_csv: output/1215_branch_correlation.csv
+      script: py/apply_multiple_testing_correction.py
+    expected:
+      "1": 3
+      "3": 3
+      "5": 4
+      "10": 0
+      "20": 0
+    note: "與第一筆同機制，鎖 1 年期輸入。"
