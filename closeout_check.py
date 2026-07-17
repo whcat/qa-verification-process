@@ -24,8 +24,9 @@ import sys
 import datetime
 from pathlib import Path
 
-# 中文可印於 cp950;emoji 一律以 ASCII 標記代替,避免預設終端崩潰(SA-05 教訓)
-sys.stdout.reconfigure(errors="replace")
+# UTF-8 輸出(2026/07/17 使用者實際終端為 UTF-8,預設 cp950 bytes 顯示為亂碼);
+# errors="replace" 保底不崩潰(SA-05 教訓:編碼問題只准影響顯示,不准影響 exit code)
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent
 LEDGER = ROOT / "稽核紀錄" / "稽核總表.md"
