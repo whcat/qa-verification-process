@@ -36,6 +36,7 @@ RECORDS_DIR = ROOT / "稽核紀錄"
 # 交付件雙副本:被稽核專案名 → 對方 repo 中存放交付件的資料夾
 DELIVERED_DIRS = {
     "Stock analysis": Path(r"C:\Users\ray74\OneDrive\桌面\專案系列\Claud AI  Project\Stock analysis\docs"),
+    "Finance_expert": Path(r"C:\Users\ray74\OneDrive\桌面\專案系列\Finance_expert\docs"),
 }
 
 TODAY = datetime.date.today().strftime("%Y/%m/%d")
